@@ -1,20 +1,39 @@
 package linode
 
-// RegionDisplay keeps human readable names while Linode API remains the source of truth.
-type RegionDisplay struct {
-	ID          string
-	Name        string
-	Continent   string
-}
-
-var RegionNames = map[string]RegionDisplay{
-	"jp-tyo-3": {
-		ID: "jp-tyo-3", Name: "日本东京3", Continent: "亚洲 Asia",
-	},
-	"jp-osa": {
-		ID: "jp-osa", Name: "日本大阪", Continent: "亚洲 Asia",
-	},
-	"sg-sin-2": {
-		ID: "sg-sin-2", Name: "新加坡2", Continent: "亚洲 Asia",
-	},
+// RegionLabels contains display translations only. Availability and the region
+// list are always obtained from the Linode API at runtime.
+var RegionLabels = map[string]string{
+	"ap-northeast": "日本东京2",
+	"ap-south":     "新加坡",
+	"ap-southeast": "澳大利亚悉尼",
+	"ap-west":      "印度孟买",
+	"au-mel":       "澳大利亚墨尔本",
+	"br-gru":       "巴西圣保罗",
+	"ca-central":   "加拿大多伦多",
+	"de-fra-2":     "德国法兰克福2",
+	"es-mad":       "西班牙马德里",
+	"eu-central":   "德国法兰克福",
+	"eu-west":      "英国伦敦",
+	"fr-par":       "法国巴黎",
+	"fr-par-2":     "法国巴黎2",
+	"gb-lon":       "英国伦敦2",
+	"id-cgk":       "印度尼西亚雅加达",
+	"in-bom-2":     "印度孟买2",
+	"in-maa":       "印度金奈",
+	"it-mil":       "意大利米兰",
+	"jp-osa":       "日本大阪",
+	"jp-tyo-3":     "日本东京3",
+	"nl-ams":       "荷兰阿姆斯特丹",
+	"se-sto":       "瑞典斯德哥尔摩",
+	"sg-sin-2":     "新加坡2",
+	"us-central":   "美国达拉斯",
+	"us-east":      "美国纽瓦克",
+	"us-iad":       "美国华盛顿",
+	"us-iad-2":     "美国华盛顿2",
+	"us-lax":       "美国洛杉矶",
+	"us-mia":       "美国迈阿密",
+	"us-ord":       "美国芝加哥",
+	"us-sea":       "美国西雅图",
+	"us-southeast": "美国亚特兰大",
+	"us-west":      "美国弗里蒙特",
 }

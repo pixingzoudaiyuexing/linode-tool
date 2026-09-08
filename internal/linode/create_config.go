@@ -3,9 +3,9 @@ package linode
 // CreateConfig contains the fixed deployment settings used by linode-tool.
 // The tool intentionally keeps the first version simple: Nanode + Debian 12.
 type CreateConfig struct {
-	Region string
+	Region       string
 	RootPassword string
-	Count int
+	Count        int
 }
 
 const (
