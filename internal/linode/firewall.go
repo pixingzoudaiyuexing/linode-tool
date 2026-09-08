@@ -25,28 +25,9 @@ func DefaultFirewallConfig() FirewallConfig {
 }
 
 func DefaultFirewallRules() linodego.FirewallRuleSet {
-	config := DefaultFirewallConfig()
-	ipv4 := []string{config.IPv4}
-	ipv6 := []string{config.IPv6}
-	addresses := linodego.NetworkAddresses{IPv4: &ipv4, IPv6: &ipv6}
 	return linodego.FirewallRuleSet{
-		InboundPolicy: "DROP",
-		Inbound: []linodego.FirewallRule{
-			{
-				Action:    "ACCEPT",
-				Label:     "allow-all-tcp",
-				Ports:     config.TCPPorts,
-				Protocol:  linodego.TCP,
-				Addresses: addresses,
-			},
-			{
-				Action:    "ACCEPT",
-				Label:     "allow-all-udp",
-				Ports:     config.UDPPorts,
-				Protocol:  linodego.UDP,
-				Addresses: addresses,
-			},
-		},
+		InboundPolicy:  "ACCEPT",
+		Inbound:        []linodego.FirewallRule{},
 		OutboundPolicy: "ACCEPT",
 		Outbound:       []linodego.FirewallRule{},
 	}

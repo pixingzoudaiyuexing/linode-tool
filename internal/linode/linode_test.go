@@ -164,22 +164,7 @@ func TestPrintInstancesIncludesRequiredFields(t *testing.T) {
 
 func assertFirewallRules(t *testing.T, rules linodego.FirewallRuleSet) {
 	t.Helper()
-	if rules.InboundPolicy != "DROP" || rules.OutboundPolicy != "ACCEPT" || len(rules.Outbound) != 0 {
+	if rules.InboundPolicy != "ACCEPT" || len(rules.Inbound) != 0 || rules.OutboundPolicy != "ACCEPT" || len(rules.Outbound) != 0 {
 		t.Errorf("unexpected firewall policies: %+v", rules)
-	}
-	if len(rules.Inbound) != 2 {
-		t.Fatalf("inbound rules = %d, want 2", len(rules.Inbound))
-	}
-	for index, rule := range rules.Inbound {
-		wantProtocol := []linodego.NetworkProtocol{linodego.TCP, linodego.UDP}[index]
-		if rule.Action != "ACCEPT" || rule.Protocol != wantProtocol || rule.Ports != "1-65535" {
-			t.Errorf("inbound rule = %+v, want ACCEPT %s 1-65535", rule, wantProtocol)
-		}
-		if rule.Addresses.IPv4 == nil || len(*rule.Addresses.IPv4) != 1 || (*rule.Addresses.IPv4)[0] != "0.0.0.0/0" {
-			t.Errorf("IPv4 addresses = %v, want 0.0.0.0/0", rule.Addresses.IPv4)
-		}
-		if rule.Addresses.IPv6 == nil || len(*rule.Addresses.IPv6) != 1 || (*rule.Addresses.IPv6)[0] != "::/0" {
-			t.Errorf("IPv6 addresses = %v, want ::/0", rule.Addresses.IPv6)
-		}
 	}
 }
