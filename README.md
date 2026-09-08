@@ -1,36 +1,58 @@
 # linode-tool
 
-`linode-tool` 是一个个人使用的 Linode CLI 开机工具，用于快速批量创建节点测试 VPS。
+`linode-tool` 是一个面向个人节点测试的 Linode CLI 工具。
 
-它保持单机 CLI 形式，不包含 Web、后台服务或数据库。
+它直接调用 Linode API，快速批量创建和管理 VPS。项目保持简单：没有 Web 界面、后台服务、数据库、Docker 或多云适配层。
+
+## 功能
+
+- 交互选择 Asia、Europe、America 三级地区菜单
+- Region 列表运行时从 Linode API 获取，不硬编码完整区域列表
+- 批量创建 Linode 实例并显示进度
+- 创建实例后自动创建并绑定全开放 Firewall
+- 查看实例 ID、名称、区域、IPv4 和状态
+- 交互选择并确认删除实例
 
 ## 固定配置
 
-- 套餐：`g6-nanode-1`（Linode Nanode 1 GB / $5 套餐）
-- 系统：`linode/debian12`
-- 实例名称：`cg-node-001`、`cg-node-002`、`cg-node-003`……
-- Region：运行时通过 Linode API 动态获取，本地映射用于显示中文名称
-- Firewall：为每台新实例创建并绑定一个 Firewall
-  - Inbound TCP `1-65535`：允许 `0.0.0.0/0` 和 `::/0`
-  - Inbound UDP `1-65535`：允许 `0.0.0.0/0` 和 `::/0`
-  - Outbound：全部允许
+每次创建都使用以下配置，命令行不会提供套餐或系统选择：
 
-> [!WARNING]
-> 默认 Firewall 按项目用途开放全部 TCP 和 UDP 端口，不适合直接承载包含敏感数据的生产服务。
+| 配置项 | 固定值 |
+| --- | --- |
+| 套餐 | `g6-nanode-1` |
+| 系统 | `linode/debian12` |
+| 名称 | `cg-node-001`、`cg-node-002`、`cg-node-003`…… |
+
+已有同名实例时，工具会自动寻找下一个可用编号。
+
+Firewall 规则如下：
+
+- Inbound TCP：`1-65535`，允许 `0.0.0.0/0` 和 `::/0`
+- Inbound UDP：`1-65535`，允许 `0.0.0.0/0` 和 `::/0`
+- Outbound：全部允许
 
 ## 安装
 
-需要 Go 1.23 或更高版本。
+### 一键安装
 
-### 一键安装（Debian/Ubuntu）
-
-在已安装 Go 1.23 或更高版本的 Debian/Ubuntu VPS 上，可以使用一条命令安装最新 `main` 分支版本：
+适用于已安装 Go 1.23 或更高版本的 Debian/Ubuntu：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/pixingzoudaiyuexing/linode-tool/main/install.sh | sh
 ```
 
-脚本会检查操作系统、Go 版本、`sudo`/root 权限和最终二进制执行状态，并将程序安装到 `/usr/local/bin/linode-tool`。安装脚本只负责一次性构建和安装，不会安装 Docker、后台服务或自动更新机制。Go 未安装或版本过低时，脚本会明确报错并退出。
+安装脚本会检查：
+
+- 当前系统是否为 Debian 或 Ubuntu
+- Go 是否存在且版本不低于 1.23
+- 是否具备 root 或 sudo 权限
+- `/usr/local/bin/linode-tool` 是否成功安装并可执行
+
+脚本只执行一次构建和安装，不会安装 Go，不会创建服务，也不会自动更新。检查失败时会输出明确错误并退出。
+
+### 手动构建
+
+适用于其他已安装 Go 1.23 或更高版本的开发环境：
 
 ```bash
 git clone https://github.com/pixingzoudaiyuexing/linode-tool.git
@@ -39,15 +61,17 @@ go build -o linode-tool ./cmd/linode-tool
 sudo install -m 0755 linode-tool /usr/local/bin/linode-tool
 ```
 
-## 配置
+## 配置 Token
 
-在 [Linode Cloud Manager](https://cloud.linode.com/profile/tokens) 创建 Personal Access Token，至少授予 Linodes 和 Firewalls 的读写权限，然后设置环境变量：
+在 [Linode Cloud Manager](https://cloud.linode.com/profile/tokens) 创建 Personal Access Token。Token 需要能够读取和管理 Linodes、Regions、Firewalls。
+
+在当前 Shell 中设置：
 
 ```bash
 export LINODE_TOKEN=xxxx
 ```
 
-可以将该命令加入当前 Shell 的配置文件。请不要把真实 Token 提交到 Git 仓库。
+不要把真实 Token 写入 Git 仓库、脚本或公开日志。
 
 ## 使用
 
@@ -57,14 +81,21 @@ export LINODE_TOKEN=xxxx
 linode-tool create
 ```
 
-命令会依次要求：
+交互流程：
 
-1. 选择亚洲、欧洲或美洲
+1. 选择一级地区：亚洲、欧洲或美洲
 2. 选择 Linode API 返回的具体 Region
-3. 输入 `Root Password`（交互终端中不会回显）
+3. 输入 `Root Password`
 4. 输入创建数量
 
-实例按顺序逐台创建，并显示 `[当前数量/总数量]` 进度。已有同名实例时，会自动选择下一个可用的 `cg-node-NNN` 名称。实例创建成功后，工具会创建并绑定 Firewall；如果 Firewall 创建失败，工具会尝试删除刚创建的实例，避免留下不符合预期且继续计费的实例。
+示例进度：
+
+```text
+[1/5] 创建中...
+[1/5] 创建成功: cg-node-001 (ID: 123456, Firewall ID: 7890)
+```
+
+在真实终端中输入 Root Password 时不会回显。实例创建成功但 Firewall 创建失败时，工具会尝试删除刚创建的实例，并报告清理结果。
 
 ### 查看实例
 
@@ -72,7 +103,7 @@ linode-tool create
 linode-tool list
 ```
 
-输出实例 ID、名称、区域、IPv4 地址和状态。
+输出字段：`ID`、`名称`、`区域`、`IP`、`状态`。
 
 ### 删除实例
 
@@ -80,7 +111,7 @@ linode-tool list
 linode-tool delete
 ```
 
-从实例列表中选择目标，并输入 `yes` 二次确认后删除。删除 Linode 实例不可恢复，请确认 ID 和名称无误。
+工具会列出实例供选择，并要求输入 `yes` 二次确认。删除 Linode 实例不可恢复，请确认实例名称和 ID。
 
 ### 查看地区
 
@@ -88,4 +119,20 @@ linode-tool delete
 linode-tool regions
 ```
 
-显示 Linode API 当前返回且支持创建 Linode 的地区。新 Region 如果暂时没有本地中文映射，会显示 API 官方名称，但不会依赖硬编码的完整 Region 列表。
+该命令用于查看当前 API 返回的可用地区。已维护中文名称的 Region 显示中文；新 Region 暂无映射时显示 Linode 官方名称。
+
+## 安全提示
+
+默认 Firewall 会开放全部 TCP 和 UDP 端口，仅适合节点测试。不要直接将该默认策略用于承载敏感数据的生产服务。
+
+创建和删除操作会真实修改 Linode 账户资源并产生费用。首次使用建议先创建数量为 `1` 的实例，确认区域、IP 和 Firewall 状态后再进行批量操作。
+
+## 开发验证
+
+本地执行：
+
+```bash
+go test ./...
+go vet ./...
+go build ./...
+```
