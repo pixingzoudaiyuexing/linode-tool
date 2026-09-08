@@ -47,7 +47,7 @@ curl -fsSL https://raw.githubusercontent.com/pixingzoudaiyuexing/linode-tool/mai
 - 是否具备 root 或 sudo 权限
 - `/usr/local/bin/linode-tool` 是否成功安装并可执行
 
-自动安装的 Go 放在 `/usr/local/lib/linode-tool/go`，不会覆盖系统已有的 Go。脚本只执行一次构建和安装，不会创建服务或自动更新。检查失败时会输出明确错误并退出。
+自动安装的 Go 放在 `/usr/local/lib/linode-tool/go`，不会覆盖系统已有的 Go。脚本会直接下载 GitHub `main` 分支源码后本地构建，避免 Go 模块代理缓存旧分支版本。脚本只执行一次构建和安装，不会创建服务或自动更新。检查失败时会输出明确错误并退出。
 
 ### 手动构建
 

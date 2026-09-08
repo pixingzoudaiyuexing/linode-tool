@@ -2,7 +2,8 @@
 
 set -eu
 
-REPOSITORY="github.com/pixingzoudaiyuexing/linode-tool/cmd/linode-tool"
+REPOSITORY="github.com/pixingzoudaiyuexing/linode-tool"
+SOURCE_URL="https://${REPOSITORY}/archive/refs/heads/main.tar.gz"
 TARGET="/usr/local/bin/linode-tool"
 GO_ROOT="/usr/local/lib/linode-tool/go"
 GO_RELEASE="1.23.12"
@@ -124,9 +125,18 @@ else
 	printf '%s\n' "Go ${GO_VERSION} 安装完成。"
 fi
 
-printf '%s\n' "正在构建 ${REPOSITORY}@main..."
-if ! GOBIN="$BUILD_DIR/bin" "$GO_BIN" install "${REPOSITORY}@main"; then
-	fail "Go 构建失败，请检查网络、Go 环境和仓库可访问性。"
+SOURCE_ARCHIVE_PATH="${BUILD_DIR}/source.tar.gz"
+SOURCE_DIR="${BUILD_DIR}/source"
+printf '%s\n' "正在下载 ${REPOSITORY} main 源码并构建..."
+if ! download "$SOURCE_URL" "$SOURCE_ARCHIVE_PATH"; then
+	fail "源码下载失败: ${SOURCE_URL}"
+fi
+mkdir -p "$SOURCE_DIR" || fail "无法创建临时源码目录。"
+if ! tar -xzf "$SOURCE_ARCHIVE_PATH" -C "$SOURCE_DIR" --strip-components=1; then
+	fail "源码解压失败。"
+fi
+if ! (cd "$SOURCE_DIR" && GOBIN="$BUILD_DIR/bin" "$GO_BIN" install ./cmd/linode-tool); then
+	fail "Go 构建失败，请检查网络、Go 环境和仓库源码。"
 fi
 
 [ -x "$BUILD_DIR/bin/linode-tool" ] || fail "Go 构建完成但未找到目标二进制。"
