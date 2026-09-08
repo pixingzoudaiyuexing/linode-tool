@@ -1,20 +1,19 @@
 package linode
 
-import "github.com/linode/linodego"
-
-// Firewall rules for the tool are intentionally kept as a single place.
-// The default policy for created nodes will be full inbound access.
+// FirewallConfig defines the default firewall policy for created nodes.
+// The MVP intentionally opens all ports as requested.
 type FirewallConfig struct {
 	TCPPorts string
 	UDPPorts string
+	IPv4     string
+	IPv6     string
 }
 
 func DefaultFirewallConfig() FirewallConfig {
 	return FirewallConfig{
 		TCPPorts: "1-65535",
 		UDPPorts: "1-65535",
+		IPv4:     "0.0.0.0/0",
+		IPv6:     "::/0",
 	}
 }
-
-// Keep the linodego import here while firewall API integration is finalized.
-var _ *linodego.Client
