@@ -22,6 +22,16 @@
 
 需要 Go 1.23 或更高版本。
 
+### 一键安装（Debian/Ubuntu）
+
+在已安装 Go 1.23 或更高版本的 Debian/Ubuntu VPS 上，可以使用一条命令安装最新 `main` 分支版本：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pixingzoudaiyuexing/linode-tool/main/install.sh | sh
+```
+
+脚本会检查操作系统、Go 版本、`sudo`/root 权限和最终二进制执行状态，并将程序安装到 `/usr/local/bin/linode-tool`。安装脚本只负责一次性构建和安装，不会安装 Docker、后台服务或自动更新机制。Go 未安装或版本过低时，脚本会明确报错并退出。
+
 ```bash
 git clone https://github.com/pixingzoudaiyuexing/linode-tool.git
 cd linode-tool
