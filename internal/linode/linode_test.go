@@ -132,7 +132,7 @@ func TestDeleteInteractiveRequiresConfirmation(t *testing.T) {
 		{ID: 1, Label: "cg-node-001", Region: "jp-tyo-3"},
 	}}
 	var output bytes.Buffer
-	prompt := NewPrompter(strings.NewReader("2\nyes\n"), &output)
+	prompt := NewPrompter(strings.NewReader("2\n\n"), &output)
 
 	if err := DeleteInteractive(context.Background(), client, prompt); err != nil {
 		t.Fatalf("DeleteInteractive() error = %v", err)
@@ -142,6 +142,25 @@ func TestDeleteInteractiveRequiresConfirmation(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), "已删除: cg-node-002") {
 		t.Fatalf("delete output missing:\n%s", output.String())
+	}
+}
+
+func TestDeleteInteractiveAllRequiresExplicitYes(t *testing.T) {
+	client := &fakeClient{instances: []linodego.Instance{
+		{ID: 2, Label: "cg-node-002", Region: "jp-osa"},
+		{ID: 1, Label: "cg-node-001", Region: "jp-tyo-3"},
+	}}
+	var output bytes.Buffer
+	prompt := NewPrompter(strings.NewReader("3\nyes\n"), &output)
+
+	if err := DeleteInteractive(context.Background(), client, prompt); err != nil {
+		t.Fatalf("DeleteInteractive() error = %v", err)
+	}
+	if len(client.deletedIDs) != 2 || client.deletedIDs[0] != 1 || client.deletedIDs[1] != 2 {
+		t.Fatalf("deleted IDs = %v, want [1 2]", client.deletedIDs)
+	}
+	if !strings.Contains(output.String(), "3. 全部删除") || !strings.Contains(output.String(), "已删除: cg-node-001") {
+		t.Fatalf("delete-all output missing:\n%s", output.String())
 	}
 }
 

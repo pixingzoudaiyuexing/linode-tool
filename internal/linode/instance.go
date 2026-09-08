@@ -7,6 +7,8 @@ import (
 	"net"
 	"sort"
 	"text/tabwriter"
+
+	"github.com/linode/linodego"
 )
 
 func PrintInstances(ctx context.Context, client Client, out io.Writer) error {
@@ -43,16 +45,21 @@ func DeleteInteractive(ctx context.Context, client Client, prompt *Prompter) err
 	for index, instance := range instances {
 		fmt.Fprintf(prompt.out, "%d. %s (ID: %d, %s)\n", index+1, instance.Label, instance.ID, instance.Region)
 	}
-	choice, err := prompt.ReadChoice("请输入序号: ", len(instances))
+	allChoice := len(instances) + 1
+	fmt.Fprintf(prompt.out, "%d. 全部删除\n", allChoice)
+	choice, err := prompt.ReadChoice("请输入序号: ", allChoice)
 	if err != nil {
 		return err
+	}
+	if choice == allChoice {
+		return deleteAllInstances(ctx, client, instances, prompt)
 	}
 	selected := instances[choice-1]
-	confirmation, err := prompt.Read(fmt.Sprintf("输入 yes 确认删除 %s (ID: %d): ", selected.Label, selected.ID))
+	confirmation, err := prompt.Read(fmt.Sprintf("确认删除 %s (ID: %d)? [Y/n]: ", selected.Label, selected.ID))
 	if err != nil {
 		return err
 	}
-	if confirmation != "yes" {
+	if confirmation != "" && confirmation != "y" && confirmation != "Y" && confirmation != "yes" && confirmation != "YES" {
 		fmt.Fprintln(prompt.out, "已取消删除。")
 		return nil
 	}
@@ -60,6 +67,31 @@ func DeleteInteractive(ctx context.Context, client Client, prompt *Prompter) err
 		return fmt.Errorf("删除实例 %s (ID: %d) 失败: %w", selected.Label, selected.ID, err)
 	}
 	fmt.Fprintf(prompt.out, "已删除: %s (ID: %d)\n", selected.Label, selected.ID)
+	return nil
+}
+
+func deleteAllInstances(ctx context.Context, client Client, instances []linodego.Instance, prompt *Prompter) error {
+	confirmation, err := prompt.Read("输入 yes 确认删除全部实例: ")
+	if err != nil {
+		return err
+	}
+	if confirmation != "yes" {
+		fmt.Fprintln(prompt.out, "已取消全部删除。")
+		return nil
+	}
+
+	failed := 0
+	for _, instance := range instances {
+		if err := client.DeleteInstance(ctx, instance.ID); err != nil {
+			failed++
+			fmt.Fprintf(prompt.out, "删除失败: %s (ID: %d): %v\n", instance.Label, instance.ID, err)
+			continue
+		}
+		fmt.Fprintf(prompt.out, "已删除: %s (ID: %d)\n", instance.Label, instance.ID)
+	}
+	if failed > 0 {
+		return fmt.Errorf("全部删除完成，但 %d/%d 台失败", failed, len(instances))
+	}
 	return nil
 }
 

@@ -65,6 +65,20 @@ func (p *Prompter) ReadChoice(prompt string, max int) (int, error) {
 	}
 }
 
+func (p *Prompter) ReadChoiceIncludingZero(prompt string, max int) (int, error) {
+	for {
+		value, err := p.Read(prompt)
+		if err != nil {
+			return 0, err
+		}
+		choice, err := strconv.Atoi(value)
+		if err == nil && choice >= 0 && choice <= max {
+			return choice, nil
+		}
+		fmt.Fprintf(p.out, "请输入 0-%d 之间的序号\n", max)
+	}
+}
+
 func (p *Prompter) ReadPassword(prompt string) (string, error) {
 	for {
 		var password string

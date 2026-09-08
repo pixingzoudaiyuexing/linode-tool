@@ -18,29 +18,73 @@ func main() {
 
 func run(args []string) error {
 	if len(args) < 2 {
-		usage()
-		return nil
+		return runMenu()
 	}
 
 	command := args[1]
 	switch command {
-	case "regions", "list", "create", "delete":
+	case "help", "regions", "list", "create", "delete":
 	default:
 		usage()
 		return fmt.Errorf("未知命令 %q", command)
 	}
+	if command == "help" {
+		usage()
+		return nil
+	}
 
 	prompter := linode.NewPrompter(os.Stdin, os.Stdout)
-	token, err := tokenFromEnvironmentOrPrompt(config.Token(), prompter)
-	if err != nil {
-		return fmt.Errorf("读取 Linode API Token 失败: %w", err)
-	}
-	client, err := linode.NewClient(token)
+	client, err := clientFromEnvironmentOrPrompt(config.Token(), prompter)
 	if err != nil {
 		return err
 	}
 	ctx := context.Background()
 
+	return runCommand(ctx, command, client, prompter)
+}
+
+func runMenu() error {
+	prompter := linode.NewPrompter(os.Stdin, os.Stdout)
+	client, err := clientFromEnvironmentOrPrompt(config.Token(), prompter)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	for {
+		fmt.Fprintln(os.Stdout, "\nlinode-tool 主菜单")
+		fmt.Fprintln(os.Stdout, "1. 创建实例")
+		fmt.Fprintln(os.Stdout, "2. 查看实例")
+		fmt.Fprintln(os.Stdout, "3. 删除实例")
+		fmt.Fprintln(os.Stdout, "4. 查看地区")
+		fmt.Fprintln(os.Stdout, "0. 退出")
+		choice, err := prompter.ReadChoiceIncludingZero("请输入序号: ", 4)
+		if err != nil {
+			return err
+		}
+		if choice == 0 {
+			fmt.Fprintln(os.Stdout, "已退出。")
+			return nil
+		}
+		commands := []string{"", "create", "list", "delete", "regions"}
+		if err := runCommand(ctx, commands[choice], client, prompter); err != nil {
+			return err
+		}
+	}
+}
+
+func clientFromEnvironmentOrPrompt(environmentToken string, prompt *linode.Prompter) (linode.Client, error) {
+	token, err := tokenFromEnvironmentOrPrompt(environmentToken, prompt)
+	if err != nil {
+		return nil, fmt.Errorf("读取 Linode API Token 失败: %w", err)
+	}
+	client, err := linode.NewClient(token)
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
+func runCommand(ctx context.Context, command string, client linode.Client, prompter *linode.Prompter) error {
 	switch command {
 	case "regions":
 		return linode.PrintRegions(ctx, client, os.Stdout)
@@ -64,7 +108,9 @@ func tokenFromEnvironmentOrPrompt(environmentToken string, prompt *linode.Prompt
 func usage() {
 	fmt.Println("linode-tool")
 	fmt.Println()
+	fmt.Println("不带参数运行将进入交互菜单。")
 	fmt.Println("命令:")
+	fmt.Println("  help      显示帮助")
 	fmt.Println("  create    创建 Debian 12 Nanode 实例")
 	fmt.Println("  list      查看实例")
 	fmt.Println("  delete    删除实例")

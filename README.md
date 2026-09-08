@@ -76,6 +76,16 @@ export LINODE_TOKEN=xxxx
 
 ## 使用
 
+### 交互菜单
+
+直接运行：
+
+```bash
+linode-tool
+```
+
+会进入主菜单，可选择创建实例、查看实例、删除实例、查看地区或退出。原有的 `linode-tool create`、`linode-tool list`、`linode-tool delete` 和 `linode-tool regions` 子命令仍然可用。
+
 ### 创建实例
 
 ```bash
@@ -112,7 +122,7 @@ linode-tool list
 linode-tool delete
 ```
 
-工具会列出实例供选择，并要求输入 `yes` 二次确认。删除 Linode 实例不可恢复，请确认实例名称和 ID。
+工具会列出实例供选择，最后一项为“全部删除”。删除单台实例时，确认提示直接回车即同意，也可以输入 `y` 或 `yes`；选择“全部删除”时必须手动输入完整的 `yes`。删除 Linode 实例不可恢复，请确认实例名称和 ID。
 
 ### 查看地区
 

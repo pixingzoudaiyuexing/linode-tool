@@ -134,7 +134,7 @@ run_privileged install -d /usr/local/bin || fail "无法创建 /usr/local/bin。
 run_privileged install -m 0755 "$BUILD_DIR/bin/linode-tool" "$TARGET" || fail "无法安装到 ${TARGET}。"
 
 [ -x "$TARGET" ] || fail "安装后未找到可执行文件 ${TARGET}。"
-if ! "$TARGET" >/dev/null 2>&1; then
+if ! "$TARGET" help >/dev/null 2>&1; then
 	fail "已写入 ${TARGET}，但执行验证失败。"
 fi
 
