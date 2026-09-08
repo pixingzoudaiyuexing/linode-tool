@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/linode/linodego"
-	"github.com/pixingzoudaiyuexing/linode-tool/internal/config"
 	"golang.org/x/oauth2"
 )
 
@@ -22,10 +21,9 @@ type Client interface {
 	CreateFirewall(context.Context, linodego.FirewallCreateOptions) (*linodego.Firewall, error)
 }
 
-func NewClient() (Client, error) {
-	token := config.Token()
+func NewClient(token string) (Client, error) {
 	if token == "" {
-		return nil, errors.New("未设置 LINODE_TOKEN 环境变量")
+		return nil, errors.New("Linode API Token 不能为空")
 	}
 
 	tokenSource := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})

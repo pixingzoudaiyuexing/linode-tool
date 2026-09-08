@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/pixingzoudaiyuexing/linode-tool/internal/config"
 	"github.com/pixingzoudaiyuexing/linode-tool/internal/linode"
 )
 
@@ -29,12 +30,16 @@ func run(args []string) error {
 		return fmt.Errorf("未知命令 %q", command)
 	}
 
-	client, err := linode.NewClient()
+	prompter := linode.NewPrompter(os.Stdin, os.Stdout)
+	token, err := tokenFromEnvironmentOrPrompt(config.Token(), prompter)
+	if err != nil {
+		return fmt.Errorf("读取 Linode API Token 失败: %w", err)
+	}
+	client, err := linode.NewClient(token)
 	if err != nil {
 		return err
 	}
 	ctx := context.Background()
-	prompter := linode.NewPrompter(os.Stdin, os.Stdout)
 
 	switch command {
 	case "regions":
@@ -47,6 +52,13 @@ func run(args []string) error {
 		return linode.DeleteInteractive(ctx, client, prompter)
 	}
 	return nil
+}
+
+func tokenFromEnvironmentOrPrompt(environmentToken string, prompt *linode.Prompter) (string, error) {
+	if environmentToken != "" {
+		return environmentToken, nil
+	}
+	return prompt.ReadPassword("Linode API Token: ")
 }
 
 func usage() {

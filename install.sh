@@ -4,12 +4,50 @@ set -eu
 
 REPOSITORY="github.com/pixingzoudaiyuexing/linode-tool/cmd/linode-tool"
 TARGET="/usr/local/bin/linode-tool"
+GO_ROOT="/usr/local/lib/linode-tool/go"
+GO_RELEASE="1.23.12"
 MIN_GO_MAJOR=1
 MIN_GO_MINOR=23
 
 fail() {
 	printf '%s\n' "错误: $*" >&2
 	exit 1
+}
+
+run_privileged() {
+	if [ "$AS_ROOT" -eq 1 ]; then
+		"$@"
+	else
+		sudo "$@"
+	fi
+}
+
+download() {
+	url=$1
+	destination=$2
+	if command -v curl >/dev/null 2>&1; then
+		curl -fL --retry 3 --connect-timeout 15 -o "$destination" "$url"
+	elif command -v wget >/dev/null 2>&1; then
+		wget -q --tries=3 --timeout=15 -O "$destination" "$url"
+	else
+		fail "未找到 curl 或 wget，无法下载 Go。"
+	fi
+}
+
+go_meets_minimum() {
+	go_version=$($1 version 2>/dev/null | awk '{print $3}' | sed 's/^go//' || true)
+	[ -n "$go_version" ] || return 1
+	go_major=$(printf '%s\n' "$go_version" | awk -F. '{print $1}')
+	go_minor=$(printf '%s\n' "$go_version" | awk -F. '{print $2}')
+	case "$go_major" in
+		''|*[!0-9]*) return 1 ;;
+	esac
+	case "$go_minor" in
+		''|*[!0-9]*) return 1 ;;
+	esac
+	[ "$go_major" -gt "$MIN_GO_MAJOR" ] || {
+		[ "$go_major" -eq "$MIN_GO_MAJOR" ] && [ "$go_minor" -ge "$MIN_GO_MINOR" ]
+	}
 }
 
 printf '%s\n' "开始安装 linode-tool..."
@@ -28,52 +66,72 @@ case "${ID:-}" in
 		;;
 esac
 
-command -v go >/dev/null 2>&1 || fail "未找到 Go，请先安装 Go ${MIN_GO_MAJOR}.${MIN_GO_MINOR} 或更高版本。"
 command -v install >/dev/null 2>&1 || fail "未找到 install 命令，无法写入 ${TARGET}。"
-
-GO_VERSION=$(go version 2>/dev/null | awk '{print $3}' | sed 's/^go//')
-[ -n "$GO_VERSION" ] || fail "无法读取 Go 版本，请检查 Go 安装是否正常。"
-
-GO_MAJOR=$(printf '%s\n' "$GO_VERSION" | awk -F. '{print $1}')
-GO_MINOR=$(printf '%s\n' "$GO_VERSION" | awk -F. '{print $2}')
-case "$GO_MAJOR" in
-	''|*[!0-9]*) fail "无法解析 Go 版本: ${GO_VERSION}" ;;
-esac
-case "$GO_MINOR" in
-	''|*[!0-9]*) fail "无法解析 Go 版本: ${GO_VERSION}" ;;
-esac
-
-if [ "$GO_MAJOR" -lt "$MIN_GO_MAJOR" ] || {
-	[ "$GO_MAJOR" -eq "$MIN_GO_MAJOR" ] && [ "$GO_MINOR" -lt "$MIN_GO_MINOR" ];
-}; then
-	fail "Go 版本 ${GO_VERSION} 过低，需要 Go ${MIN_GO_MAJOR}.${MIN_GO_MINOR} 或更高版本。"
-fi
+command -v tar >/dev/null 2>&1 || fail "未找到 tar 命令，无法安装 Go。"
+command -v sha256sum >/dev/null 2>&1 || fail "未找到 sha256sum 命令，无法校验 Go 安装包。"
 
 if [ "$(id -u)" -eq 0 ]; then
 	AS_ROOT=1
 else
 	AS_ROOT=0
-	command -v sudo >/dev/null 2>&1 || fail "写入 ${TARGET} 需要 root 权限，且未找到 sudo。请使用 root 运行或安装 sudo。"
+	command -v sudo >/dev/null 2>&1 || fail "安装需要 root 权限，且未找到 sudo。请使用 root 运行或安装 sudo。"
 fi
 
 BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/linode-tool.XXXXXX") || fail "无法创建临时构建目录。"
 trap 'rm -rf "$BUILD_DIR"' EXIT HUP INT TERM
 mkdir -p "$BUILD_DIR/bin" || fail "无法创建临时 Go 安装目录。"
 
-printf '%s\n' "检测到 Debian/Ubuntu，Go ${GO_VERSION}。正在构建 ${REPOSITORY}@main..."
-if ! GOBIN="$BUILD_DIR/bin" go install "${REPOSITORY}@main"; then
+GO_BIN=$(command -v go 2>/dev/null || true)
+if [ -z "$GO_BIN" ] && [ -x "$GO_ROOT/bin/go" ]; then
+	GO_BIN="$GO_ROOT/bin/go"
+fi
+
+if [ -n "$GO_BIN" ] && go_meets_minimum "$GO_BIN"; then
+	GO_VERSION=$($GO_BIN version | awk '{print $3}' | sed 's/^go//')
+	printf '%s\n' "使用现有 Go ${GO_VERSION}。"
+else
+	case "$(uname -m)" in
+		x86_64|amd64)
+			GO_ARCH="amd64"
+			GO_SHA256="d3847fef834e9db11bf64e3fb34db9c04db14e068eeb064f49af747010454f90"
+			;;
+		aarch64|arm64)
+			GO_ARCH="arm64"
+			GO_SHA256="52ce172f96e21da53b1ae9079808560d49b02ac86cecfa457217597f9bc28ab3"
+			;;
+		*)
+			fail "不支持的 CPU 架构: $(uname -m)，目前仅支持 amd64 和 arm64。"
+			;;
+	esac
+
+	GO_ARCHIVE="go${GO_RELEASE}.linux-${GO_ARCH}.tar.gz"
+	GO_URL="https://go.dev/dl/${GO_ARCHIVE}"
+	GO_ARCHIVE_PATH="${BUILD_DIR}/${GO_ARCHIVE}"
+	printf '%s\n' "未找到 Go ${MIN_GO_MAJOR}.${MIN_GO_MINOR}+，正在下载并安装 Go ${GO_RELEASE} (${GO_ARCH})..."
+	if ! download "$GO_URL" "$GO_ARCHIVE_PATH"; then
+		fail "Go 下载失败: ${GO_URL}"
+	fi
+
+	ACTUAL_SHA256=$(sha256sum "$GO_ARCHIVE_PATH" | awk '{print $1}')
+	[ "$ACTUAL_SHA256" = "$GO_SHA256" ] || fail "Go 安装包 SHA-256 校验失败，已停止安装。"
+
+	run_privileged install -d "$(dirname "$GO_ROOT")" || fail "无法创建 Go 安装目录。"
+	run_privileged rm -rf "$GO_ROOT" || fail "无法清理旧的 linode-tool Go 安装目录。"
+	run_privileged tar -C "$(dirname "$GO_ROOT")" -xzf "$GO_ARCHIVE_PATH" || fail "Go 解压失败。"
+	GO_BIN="$GO_ROOT/bin/go"
+	go_meets_minimum "$GO_BIN" || fail "Go 安装完成但版本验证失败。"
+	GO_VERSION=$($GO_BIN version | awk '{print $3}' | sed 's/^go//')
+	printf '%s\n' "Go ${GO_VERSION} 安装完成。"
+fi
+
+printf '%s\n' "正在构建 ${REPOSITORY}@main..."
+if ! GOBIN="$BUILD_DIR/bin" "$GO_BIN" install "${REPOSITORY}@main"; then
 	fail "Go 构建失败，请检查网络、Go 环境和仓库可访问性。"
 fi
 
 [ -x "$BUILD_DIR/bin/linode-tool" ] || fail "Go 构建完成但未找到目标二进制。"
-
-if [ "$AS_ROOT" -eq 1 ]; then
-	install -d /usr/local/bin || fail "无法创建 /usr/local/bin。"
-	install -m 0755 "$BUILD_DIR/bin/linode-tool" "$TARGET" || fail "无法安装到 ${TARGET}。"
-else
-	sudo install -d /usr/local/bin || fail "无法创建 /usr/local/bin，请检查 sudo 权限。"
-	sudo install -m 0755 "$BUILD_DIR/bin/linode-tool" "$TARGET" || fail "无法安装到 ${TARGET}，请检查 sudo 权限。"
-fi
+run_privileged install -d /usr/local/bin || fail "无法创建 /usr/local/bin。"
+run_privileged install -m 0755 "$BUILD_DIR/bin/linode-tool" "$TARGET" || fail "无法安装到 ${TARGET}。"
 
 [ -x "$TARGET" ] || fail "安装后未找到可执行文件 ${TARGET}。"
 if ! "$TARGET" >/dev/null 2>&1; then
@@ -81,4 +139,4 @@ if ! "$TARGET" >/dev/null 2>&1; then
 fi
 
 printf '%s\n' "安装成功: ${TARGET}"
-printf '%s\n' "请先设置 LINODE_TOKEN，再运行: linode-tool create"
+printf '%s\n' "运行 linode-tool 时可通过环境变量提供 LINODE_TOKEN，或按提示交互输入。"

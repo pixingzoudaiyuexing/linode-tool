@@ -35,7 +35,7 @@ Firewall 规则如下：
 
 ### 一键安装
 
-适用于已安装 Go 1.23 或更高版本的 Debian/Ubuntu：
+适用于 Debian/Ubuntu。系统已有 Go 1.23 或更高版本时直接复用；没有 Go 或版本过低时，脚本会自动安装官方 Go 1.23.12：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/pixingzoudaiyuexing/linode-tool/main/install.sh | sh
@@ -44,11 +44,11 @@ curl -fsSL https://raw.githubusercontent.com/pixingzoudaiyuexing/linode-tool/mai
 安装脚本会检查：
 
 - 当前系统是否为 Debian 或 Ubuntu
-- Go 是否存在且版本不低于 1.23
+- Go 是否存在且版本不低于 1.23；必要时自动安装 Go 1.23.12
 - 是否具备 root 或 sudo 权限
 - `/usr/local/bin/linode-tool` 是否成功安装并可执行
 
-脚本只执行一次构建和安装，不会安装 Go，不会创建服务，也不会自动更新。检查失败时会输出明确错误并退出。
+自动安装的 Go 放在 `/usr/local/lib/linode-tool/go`，不会覆盖系统已有的 Go。脚本只执行一次构建和安装，不会创建服务或自动更新。检查失败时会输出明确错误并退出。
 
 ### 手动构建
 
@@ -65,11 +65,13 @@ sudo install -m 0755 linode-tool /usr/local/bin/linode-tool
 
 在 [Linode Cloud Manager](https://cloud.linode.com/profile/tokens) 创建 Personal Access Token。Token 需要能够读取和管理 Linodes、Regions、Firewalls。
 
-在当前 Shell 中设置：
+可以提前在当前 Shell 中设置：
 
 ```bash
 export LINODE_TOKEN=xxxx
 ```
+
+如果没有设置环境变量，运行 `linode-tool` 时会进入交互界面并隐藏输入 Linode API Token。Token 只在当前进程内使用，不会写入文件。
 
 不要把真实 Token 写入 Git 仓库、脚本或公开日志。
 
