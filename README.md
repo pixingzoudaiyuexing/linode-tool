@@ -30,6 +30,8 @@ Firewall 使用全放行策略：
 - Inbound：全部协议、全部端口、所有 IPv4/IPv6 来源（`ACCEPT`）
 - Outbound：全部协议、全部端口、所有目标（`ACCEPT`）
 
+Firewall 名称包含 Linode 实例 ID，避免实例名称被重复使用时与历史 Firewall 重名。
+
 ## 安装
 
 ### 一键安装

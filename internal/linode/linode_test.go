@@ -126,6 +126,30 @@ func TestCreateInstancesCleansUpWhenFirewallFails(t *testing.T) {
 	}
 }
 
+func TestFirewallLabelIncludesUniqueInstanceID(t *testing.T) {
+	client := &fakeClient{}
+	ctx := context.Background()
+
+	first, err := CreateFirewallForInstance(ctx, client, linodego.Instance{ID: 101, Label: "cg-node-001"})
+	if err != nil {
+		t.Fatalf("first CreateFirewallForInstance() error = %v", err)
+	}
+	second, err := CreateFirewallForInstance(ctx, client, linodego.Instance{ID: 202, Label: "cg-node-001"})
+	if err != nil {
+		t.Fatalf("second CreateFirewallForInstance() error = %v", err)
+	}
+
+	if first.Label != "cg-node-001-fw-101" {
+		t.Errorf("first firewall label = %q, want cg-node-001-fw-101", first.Label)
+	}
+	if second.Label != "cg-node-001-fw-202" {
+		t.Errorf("second firewall label = %q, want cg-node-001-fw-202", second.Label)
+	}
+	if first.Label == second.Label {
+		t.Fatalf("firewall labels must be unique, both are %q", first.Label)
+	}
+}
+
 func TestDeleteInteractiveRequiresConfirmation(t *testing.T) {
 	client := &fakeClient{instances: []linodego.Instance{
 		{ID: 2, Label: "cg-node-002", Region: "jp-osa"},

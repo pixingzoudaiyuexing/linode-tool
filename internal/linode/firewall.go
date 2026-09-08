@@ -2,6 +2,7 @@ package linode
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/linode/linodego"
 )
@@ -35,7 +36,7 @@ func DefaultFirewallRules() linodego.FirewallRuleSet {
 
 func CreateFirewallForInstance(ctx context.Context, client Client, instance linodego.Instance) (*linodego.Firewall, error) {
 	return client.CreateFirewall(ctx, linodego.FirewallCreateOptions{
-		Label: instance.Label + "-firewall",
+		Label: fmt.Sprintf("%s-fw-%d", instance.Label, instance.ID),
 		Rules: DefaultFirewallRules(),
 		Devices: linodego.DevicesCreationOptions{
 			Linodes: []int{instance.ID},
