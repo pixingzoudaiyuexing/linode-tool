@@ -20,9 +20,16 @@ func PrintInstances(ctx context.Context, client Client, out io.Writer) error {
 	writer := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
 	fmt.Fprintln(writer, "ID\t名称\t区域\tIP\t状态")
 	for _, item := range instances {
-		fmt.Fprintf(writer, "%d\t%s\t%s\t%s\t%s\n", item.ID, item.Label, item.Region, instanceIPv4(item.IPv4), item.Status)
+		fmt.Fprintf(writer, "%d\t%s\t%s\t%s\t%s\n", item.ID, item.Label, displayRegion(item.Region), instanceIPv4(item.IPv4), item.Status)
 	}
 	return writer.Flush()
+}
+
+func displayRegion(region string) string {
+	if label, ok := RegionLabels[region]; ok && label != "" {
+		return fmt.Sprintf("%s（%s）", region, label)
+	}
+	return region
 }
 
 func DeleteInteractive(ctx context.Context, client Client, prompt *Prompter) error {
