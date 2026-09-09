@@ -9,7 +9,7 @@
 - 交互选择 Asia、Europe、America 三级地区菜单
 - Region 列表运行时从 Linode API 获取，不硬编码完整区域列表
 - 批量创建 Linode 实例并显示进度
-- 创建实例后自动创建并绑定全开放 Firewall
+- 创建实例后自动创建或复用一个共享的全开放 Firewall，并绑定全部实例
 - 查看实例 ID、名称、区域、IPv4 和状态
 - 交互选择并确认删除实例
 
@@ -30,7 +30,7 @@ Firewall 使用全放行策略：
 - Inbound：全部协议、全部端口、所有 IPv4/IPv6 来源（`ACCEPT`）
 - Outbound：全部协议、全部端口、所有目标（`ACCEPT`）
 
-Firewall 名称包含 Linode 实例 ID，避免实例名称被重复使用时与历史 Firewall 重名。
+所有实例共用一个 Firewall，默认名称为 `cg-allow-all`，避免每台实例单独创建 Firewall 消耗账户的 active services 配额。升级自旧版本时，如果账户里还没有 `cg-allow-all`，工具会优先复用旧版生成的 `cg-node-*-fw-*` Firewall，不会为了迁移再额外创建一个 Firewall。
 
 ## 安装
 
@@ -106,9 +106,11 @@ linode-tool create
 ```text
 [1/5] 创建中...
 [1/5] 创建成功: cg-node-001 (ID: 123456, Firewall ID: 7890)
+[2/5] 创建中...
+[2/5] 创建成功: cg-node-002 (ID: 123457, Firewall ID: 7890)
 ```
 
-在真实终端中输入 Root Password 时不会回显。实例创建成功但 Firewall 创建失败时，工具会尝试删除刚创建的实例，并报告清理结果。
+在真实终端中输入 Root Password 时不会回显。首次需要创建共享 Firewall 时，如果 Firewall 创建失败，工具会删除刚创建的实例；复用共享 Firewall 时，如果单台实例绑定失败，也只会回滚当前失败的实例，不影响已经成功的实例和共享 Firewall。
 
 ### 查看实例
 
@@ -124,7 +126,7 @@ linode-tool list
 linode-tool delete
 ```
 
-工具会列出实例供选择，最后一项为“全部删除”。删除单台实例时，确认提示直接回车即同意，也可以输入 `y` 或 `yes`；选择“全部删除”时必须手动输入完整的 `yes`。删除 Linode 实例不可恢复，请确认实例名称和 ID。
+工具会列出实例供选择，最后一项为“全部删除”。删除单台实例时，确认提示直接回车即同意，也可以输入 `y` 或 `yes`；选择“全部删除”时必须手动输入完整的 `yes`。删除 Linode 实例不可恢复，请确认实例名称和 ID。删除实例不会删除共享 Firewall，后续创建实例会继续复用它。
 
 ### 查看地区
 
