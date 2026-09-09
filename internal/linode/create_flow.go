@@ -69,9 +69,9 @@ func CreateInstances(ctx context.Context, client Client, config CreateConfig, ou
 				failed++
 				cleanupErr := client.DeleteInstance(ctx, instance.ID)
 				if cleanupErr != nil {
-					fmt.Fprintf(out, "[%d/%d] Firewall 创建失败: %v；实例清理失败，请手动删除 %s (%s): %v\n", index+1, len(labels), firewallErr, instance.Label, displayInstanceDetails(*instance), cleanupErr)
+					fmt.Fprintf(out, "[%d/%d] Firewall 创建失败: %v；实例清理失败，请手动删除实例 %d（名称: %s, 区域: %s, IP: %s）: %v\n", index+1, len(labels), firewallErr, instance.ID, instance.Label, displayRegion(instance.Region), instanceIPv4(instance.IPv4), cleanupErr)
 				} else {
-					fmt.Fprintf(out, "[%d/%d] Firewall 创建失败: %v；已删除刚创建的实例 %s (%s)\n", index+1, len(labels), firewallErr, instance.Label, displayInstanceDetails(*instance))
+					fmt.Fprintf(out, "[%d/%d] Firewall 创建失败: %v；已删除刚创建的实例 %d（名称: %s, 区域: %s, IP: %s）\n", index+1, len(labels), firewallErr, instance.ID, instance.Label, displayRegion(instance.Region), instanceIPv4(instance.IPv4))
 				}
 				continue
 			}
@@ -81,9 +81,9 @@ func CreateInstances(ctx context.Context, client Client, config CreateConfig, ou
 				failed++
 				cleanupErr := client.DeleteInstance(ctx, instance.ID)
 				if cleanupErr != nil {
-					fmt.Fprintf(out, "[%d/%d] Firewall 绑定失败: %v；实例清理失败，请手动删除 %s (%s): %v\n", index+1, len(labels), attachErr, instance.Label, displayInstanceDetails(*instance), cleanupErr)
+					fmt.Fprintf(out, "[%d/%d] Firewall 绑定失败: %v；实例清理失败，请手动删除实例 %d（名称: %s, 区域: %s, IP: %s）: %v\n", index+1, len(labels), attachErr, instance.ID, instance.Label, displayRegion(instance.Region), instanceIPv4(instance.IPv4), cleanupErr)
 				} else {
-					fmt.Fprintf(out, "[%d/%d] Firewall 绑定失败: %v；已删除刚创建的实例 %s (%s)\n", index+1, len(labels), attachErr, instance.Label, displayInstanceDetails(*instance))
+					fmt.Fprintf(out, "[%d/%d] Firewall 绑定失败: %v；已删除刚创建的实例 %d（名称: %s, 区域: %s, IP: %s）\n", index+1, len(labels), attachErr, instance.ID, instance.Label, displayRegion(instance.Region), instanceIPv4(instance.IPv4))
 				}
 				continue
 			}
