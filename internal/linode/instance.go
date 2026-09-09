@@ -32,6 +32,10 @@ func displayRegion(region string) string {
 	return region
 }
 
+func displayInstanceDetails(instance linodego.Instance) string {
+	return fmt.Sprintf("ID: %d, 区域: %s, IP: %s", instance.ID, displayRegion(instance.Region), instanceIPv4(instance.IPv4))
+}
+
 func DeleteInteractive(ctx context.Context, client Client, prompt *Prompter) error {
 	instances, err := client.ListInstances(ctx, nil)
 	if err != nil {
@@ -50,7 +54,7 @@ func DeleteInteractive(ctx context.Context, client Client, prompt *Prompter) err
 	})
 	fmt.Fprintln(prompt.out, "请选择删除:")
 	for index, instance := range instances {
-		fmt.Fprintf(prompt.out, "%d. %s (ID: %d, 区域: %s)\n", index+1, instance.Label, instance.ID, displayRegion(instance.Region))
+		fmt.Fprintf(prompt.out, "%d. %s (%s)\n", index+1, instance.Label, displayInstanceDetails(instance))
 	}
 	allChoice := len(instances) + 1
 	fmt.Fprintf(prompt.out, "%d. 全部删除\n", allChoice)
@@ -62,7 +66,7 @@ func DeleteInteractive(ctx context.Context, client Client, prompt *Prompter) err
 		return deleteAllInstances(ctx, client, instances, prompt)
 	}
 	selected := instances[choice-1]
-	confirmation, err := prompt.Read(fmt.Sprintf("确认删除 %s (ID: %d, 区域: %s)? [Y/n]: ", selected.Label, selected.ID, displayRegion(selected.Region)))
+	confirmation, err := prompt.Read(fmt.Sprintf("确认删除 %s (%s)? [Y/n]: ", selected.Label, displayInstanceDetails(selected)))
 	if err != nil {
 		return err
 	}
@@ -71,9 +75,9 @@ func DeleteInteractive(ctx context.Context, client Client, prompt *Prompter) err
 		return nil
 	}
 	if err := client.DeleteInstance(ctx, selected.ID); err != nil {
-		return fmt.Errorf("删除实例 %s (ID: %d, 区域: %s) 失败: %w", selected.Label, selected.ID, displayRegion(selected.Region), err)
+		return fmt.Errorf("删除实例 %s (%s) 失败: %w", selected.Label, displayInstanceDetails(selected), err)
 	}
-	fmt.Fprintf(prompt.out, "已删除: %s (ID: %d, 区域: %s)\n", selected.Label, selected.ID, displayRegion(selected.Region))
+	fmt.Fprintf(prompt.out, "已删除: %s (%s)\n", selected.Label, displayInstanceDetails(selected))
 	return nil
 }
 
@@ -91,10 +95,10 @@ func deleteAllInstances(ctx context.Context, client Client, instances []linodego
 	for _, instance := range instances {
 		if err := client.DeleteInstance(ctx, instance.ID); err != nil {
 			failed++
-			fmt.Fprintf(prompt.out, "删除失败: %s (ID: %d, 区域: %s): %v\n", instance.Label, instance.ID, displayRegion(instance.Region), err)
+			fmt.Fprintf(prompt.out, "删除失败: %s (%s): %v\n", instance.Label, displayInstanceDetails(instance), err)
 			continue
 		}
-		fmt.Fprintf(prompt.out, "已删除: %s (ID: %d, 区域: %s)\n", instance.Label, instance.ID, displayRegion(instance.Region))
+		fmt.Fprintf(prompt.out, "已删除: %s (%s)\n", instance.Label, displayInstanceDetails(instance))
 	}
 	if failed > 0 {
 		return fmt.Errorf("全部删除完成，但 %d/%d 台失败", failed, len(instances))
