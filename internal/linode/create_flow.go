@@ -42,6 +42,11 @@ func CreateInstances(ctx context.Context, client Client, config CreateConfig, ou
 	}
 	labels := NextInstanceLabels(instances, NormalizeCount(config.Count))
 
+	sharedFirewall, err := FindReusableFirewall(ctx, client)
+	if err != nil {
+		return err
+	}
+
 	failed := 0
 	for index, label := range labels {
 		fmt.Fprintf(out, "[%d/%d] 创建中...\n", index+1, len(labels))
@@ -58,19 +63,33 @@ func CreateInstances(ctx context.Context, client Client, config CreateConfig, ou
 			continue
 		}
 
-		firewall, err := CreateFirewallForInstance(ctx, client, *instance)
-		if err != nil {
-			failed++
-			cleanupErr := client.DeleteInstance(ctx, instance.ID)
-			if cleanupErr != nil {
-				fmt.Fprintf(out, "[%d/%d] Firewall 创建失败: %v；实例清理失败，请手动删除实例 %d: %v\n", index+1, len(labels), err, instance.ID, cleanupErr)
-			} else {
-				fmt.Fprintf(out, "[%d/%d] Firewall 创建失败: %v；已删除刚创建的实例 %d\n", index+1, len(labels), err, instance.ID)
+		if sharedFirewall == nil {
+			firewall, firewallErr := CreateSharedFirewallForInstance(ctx, client, *instance)
+			if firewallErr != nil {
+				failed++
+				cleanupErr := client.DeleteInstance(ctx, instance.ID)
+				if cleanupErr != nil {
+					fmt.Fprintf(out, "[%d/%d] Firewall 创建失败: %v；实例清理失败，请手动删除实例 %d: %v\n", index+1, len(labels), firewallErr, instance.ID, cleanupErr)
+				} else {
+					fmt.Fprintf(out, "[%d/%d] Firewall 创建失败: %v；已删除刚创建的实例 %d\n", index+1, len(labels), firewallErr, instance.ID)
+				}
+				continue
 			}
-			continue
+			sharedFirewall = firewall
+		} else {
+			if _, attachErr := AttachFirewallToInstance(ctx, client, sharedFirewall.ID, instance.ID); attachErr != nil {
+				failed++
+				cleanupErr := client.DeleteInstance(ctx, instance.ID)
+				if cleanupErr != nil {
+					fmt.Fprintf(out, "[%d/%d] Firewall 绑定失败: %v；实例清理失败，请手动删除实例 %d: %v\n", index+1, len(labels), attachErr, instance.ID, cleanupErr)
+				} else {
+					fmt.Fprintf(out, "[%d/%d] Firewall 绑定失败: %v；已删除刚创建的实例 %d\n", index+1, len(labels), attachErr, instance.ID)
+				}
+				continue
+			}
 		}
 
-		fmt.Fprintf(out, "[%d/%d] 创建成功: %s (ID: %d, Firewall ID: %d)\n", index+1, len(labels), instance.Label, instance.ID, firewall.ID)
+		fmt.Fprintf(out, "[%d/%d] 创建成功: %s (ID: %d, Firewall ID: %d)\n", index+1, len(labels), instance.Label, instance.ID, sharedFirewall.ID)
 	}
 
 	if failed > 0 {
