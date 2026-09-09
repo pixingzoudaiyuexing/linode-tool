@@ -11,17 +11,26 @@ import (
 	"github.com/linode/linodego"
 )
 
+type firewallDeviceCall struct {
+	firewallID int
+	options    linodego.FirewallDeviceCreateOptions
+}
+
 type fakeClient struct {
-	regions          []linodego.Region
-	instances        []linodego.Instance
-	createOptions    []linodego.InstanceCreateOptions
-	firewallOptions  []linodego.FirewallCreateOptions
-	deletedIDs       []int
-	createErr        error
-	firewallErr      error
-	deleteErr        error
-	listRegionsErr   error
-	listInstancesErr error
+	regions            []linodego.Region
+	instances          []linodego.Instance
+	firewalls          []linodego.Firewall
+	createOptions      []linodego.InstanceCreateOptions
+	firewallOptions    []linodego.FirewallCreateOptions
+	firewallDeviceCalls []firewallDeviceCall
+	deletedIDs         []int
+	createErr          error
+	firewallErr        error
+	firewallDeviceErr  error
+	deleteErr          error
+	listRegionsErr     error
+	listInstancesErr   error
+	listFirewallsErr   error
 }
 
 func (f *fakeClient) ListRegions(context.Context, *linodego.ListOptions) ([]linodego.Region, error) {
@@ -45,12 +54,24 @@ func (f *fakeClient) DeleteInstance(_ context.Context, id int) error {
 	return f.deleteErr
 }
 
+func (f *fakeClient) ListFirewalls(context.Context, *linodego.ListOptions) ([]linodego.Firewall, error) {
+	return append([]linodego.Firewall(nil), f.firewalls...), f.listFirewallsErr
+}
+
 func (f *fakeClient) CreateFirewall(_ context.Context, options linodego.FirewallCreateOptions) (*linodego.Firewall, error) {
 	f.firewallOptions = append(f.firewallOptions, options)
 	if f.firewallErr != nil {
 		return nil, f.firewallErr
 	}
-	return &linodego.Firewall{ID: 900 + len(f.firewallOptions), Label: options.Label}, nil
+	return &linodego.Firewall{ID: 900 + len(f.firewallOptions), Label: options.Label, Rules: options.Rules}, nil
+}
+
+func (f *fakeClient) CreateFirewallDevice(_ context.Context, firewallID int, options linodego.FirewallDeviceCreateOptions) (*linodego.FirewallDevice, error) {
+	f.firewallDeviceCalls = append(f.firewallDeviceCalls, firewallDeviceCall{firewallID: firewallID, options: options})
+	if f.firewallDeviceErr != nil {
+		return nil, f.firewallDeviceErr
+	}
+	return &linodego.FirewallDevice{ID: 1000 + len(f.firewallDeviceCalls)}, nil
 }
 
 func TestSelectRegionUsesDynamicAPIResults(t *testing.T) {
@@ -80,7 +101,7 @@ func TestSelectRegionUsesDynamicAPIResults(t *testing.T) {
 	}
 }
 
-func TestCreateInstancesUsesFixedProfileAndFirewall(t *testing.T) {
+func TestCreateInstancesUsesFixedProfileAndSharedFirewall(t *testing.T) {
 	client := &fakeClient{instances: []linodego.Instance{{ID: 1, Label: "cg-node-001"}}}
 	var output bytes.Buffer
 	config := CreateConfig{Region: "jp-tyo-3", RootPassword: "secret-password", Count: 2}
@@ -88,29 +109,95 @@ func TestCreateInstancesUsesFixedProfileAndFirewall(t *testing.T) {
 	if err := CreateInstances(context.Background(), client, config, &output); err != nil {
 		t.Fatalf("CreateInstances() error = %v", err)
 	}
-	if len(client.createOptions) != 2 || len(client.firewallOptions) != 2 {
-		t.Fatalf("created %d instances and %d firewalls, want 2 each", len(client.createOptions), len(client.firewallOptions))
+	if len(client.createOptions) != 2 {
+		t.Fatalf("created %d instances, want 2", len(client.createOptions))
 	}
+	if len(client.firewallOptions) != 1 {
+		t.Fatalf("created %d firewalls, want 1 shared firewall", len(client.firewallOptions))
+	}
+	if len(client.firewallDeviceCalls) != 1 {
+		t.Fatalf("created %d firewall device bindings, want 1 for the second instance", len(client.firewallDeviceCalls))
+	}
+
 	for index, options := range client.createOptions {
 		wantLabel := []string{"cg-node-002", "cg-node-003"}[index]
 		if options.Label != wantLabel || options.Region != config.Region || options.Type != DefaultType || options.Image != DefaultImage || options.RootPass != config.RootPassword {
 			t.Errorf("create options = %+v, want fixed profile with label %s", options, wantLabel)
 		}
-
-		firewall := client.firewallOptions[index]
-		if len(firewall.Devices.Linodes) != 1 || firewall.Devices.Linodes[0] != 101+index {
-			t.Errorf("firewall devices = %v, want instance %d", firewall.Devices.Linodes, 101+index)
-		}
-		assertFirewallRules(t, firewall.Rules)
 	}
-	for _, expected := range []string{"[1/2] 创建中...", "[2/2] 创建中...", "创建成功"} {
+
+	firewall := client.firewallOptions[0]
+	if firewall.Label != SharedFirewallLabel {
+		t.Errorf("firewall label = %q, want %q", firewall.Label, SharedFirewallLabel)
+	}
+	if len(firewall.Devices.Linodes) != 1 || firewall.Devices.Linodes[0] != 101 {
+		t.Errorf("initial firewall devices = %v, want [101]", firewall.Devices.Linodes)
+	}
+	assertFirewallRules(t, firewall.Rules)
+
+	binding := client.firewallDeviceCalls[0]
+	if binding.firewallID != 901 || binding.options.ID != 102 || binding.options.Type != linodego.FirewallDeviceLinode {
+		t.Errorf("binding = %+v, want firewall 901 -> linode 102", binding)
+	}
+
+	for _, expected := range []string{"[1/2] 创建中...", "[2/2] 创建中...", "创建成功", "Firewall ID: 901"} {
 		if !strings.Contains(output.String(), expected) {
 			t.Errorf("create output does not contain %q:\n%s", expected, output.String())
 		}
 	}
 }
 
-func TestCreateInstancesCleansUpWhenFirewallFails(t *testing.T) {
+func TestCreateInstancesReusesExistingSharedFirewall(t *testing.T) {
+	client := &fakeClient{firewalls: []linodego.Firewall{{ID: 777, Label: SharedFirewallLabel}}}
+	var output bytes.Buffer
+
+	if err := CreateInstances(context.Background(), client, CreateConfig{Region: "sg-sin-2", RootPassword: "secret-password", Count: 2}, &output); err != nil {
+		t.Fatalf("CreateInstances() error = %v", err)
+	}
+	if len(client.firewallOptions) != 0 {
+		t.Fatalf("created %d new firewalls, want 0", len(client.firewallOptions))
+	}
+	if len(client.firewallDeviceCalls) != 2 {
+		t.Fatalf("firewall bindings = %d, want 2", len(client.firewallDeviceCalls))
+	}
+	for index, binding := range client.firewallDeviceCalls {
+		if binding.firewallID != 777 || binding.options.ID != 101+index {
+			t.Errorf("binding[%d] = %+v, want firewall 777 -> linode %d", index, binding, 101+index)
+		}
+	}
+}
+
+func TestCreateInstancesReusesLegacyManagedFirewall(t *testing.T) {
+	client := &fakeClient{firewalls: []linodego.Firewall{{ID: 888, Label: "cg-node-001-fw-104674547"}}}
+	var output bytes.Buffer
+
+	if err := CreateInstances(context.Background(), client, CreateConfig{Region: "sg-sin-2", RootPassword: "secret-password", Count: 1}, &output); err != nil {
+		t.Fatalf("CreateInstances() error = %v", err)
+	}
+	if len(client.firewallOptions) != 0 {
+		t.Fatalf("created %d new firewalls, want 0 because legacy firewall should be reused", len(client.firewallOptions))
+	}
+	if len(client.firewallDeviceCalls) != 1 || client.firewallDeviceCalls[0].firewallID != 888 || client.firewallDeviceCalls[0].options.ID != 101 {
+		t.Fatalf("legacy firewall binding = %+v, want firewall 888 -> linode 101", client.firewallDeviceCalls)
+	}
+}
+
+func TestFindReusableFirewallPrefersSharedFirewall(t *testing.T) {
+	client := &fakeClient{firewalls: []linodego.Firewall{
+		{ID: 888, Label: "cg-node-001-fw-104674547"},
+		{ID: 777, Label: SharedFirewallLabel},
+	}}
+
+	firewall, err := FindReusableFirewall(context.Background(), client)
+	if err != nil {
+		t.Fatalf("FindReusableFirewall() error = %v", err)
+	}
+	if firewall == nil || firewall.ID != 777 {
+		t.Fatalf("FindReusableFirewall() = %+v, want shared firewall ID 777", firewall)
+	}
+}
+
+func TestCreateInstancesCleansUpWhenFirewallCreateFails(t *testing.T) {
 	client := &fakeClient{firewallErr: errors.New("firewall unavailable")}
 	var output bytes.Buffer
 	err := CreateInstances(context.Background(), client, CreateConfig{Region: "jp-osa", RootPassword: "secret-password", Count: 1}, &output)
@@ -121,32 +208,44 @@ func TestCreateInstancesCleansUpWhenFirewallFails(t *testing.T) {
 	if len(client.deletedIDs) != 1 || client.deletedIDs[0] != 101 {
 		t.Fatalf("deleted IDs = %v, want [101]", client.deletedIDs)
 	}
-	if !strings.Contains(output.String(), "已删除刚创建的实例 101") {
+	if !strings.Contains(output.String(), "Firewall 创建失败") || !strings.Contains(output.String(), "已删除刚创建的实例 101") {
 		t.Fatalf("cleanup output missing:\n%s", output.String())
 	}
 }
 
-func TestFirewallLabelIncludesUniqueInstanceID(t *testing.T) {
+func TestCreateInstancesCleansUpWhenFirewallAttachFails(t *testing.T) {
+	client := &fakeClient{
+		firewalls:         []linodego.Firewall{{ID: 777, Label: SharedFirewallLabel}},
+		firewallDeviceErr: errors.New("attach unavailable"),
+	}
+	var output bytes.Buffer
+	err := CreateInstances(context.Background(), client, CreateConfig{Region: "jp-osa", RootPassword: "secret-password", Count: 1}, &output)
+
+	if err == nil {
+		t.Fatal("CreateInstances() error = nil, want batch failure")
+	}
+	if len(client.deletedIDs) != 1 || client.deletedIDs[0] != 101 {
+		t.Fatalf("deleted IDs = %v, want [101]", client.deletedIDs)
+	}
+	if len(client.firewallOptions) != 0 {
+		t.Fatalf("created %d firewalls, want 0", len(client.firewallOptions))
+	}
+	if !strings.Contains(output.String(), "Firewall 绑定失败") || !strings.Contains(output.String(), "已删除刚创建的实例 101") {
+		t.Fatalf("cleanup output missing:\n%s", output.String())
+	}
+}
+
+func TestCreateSharedFirewallForInstanceUsesStableLabel(t *testing.T) {
 	client := &fakeClient{}
-	ctx := context.Background()
-
-	first, err := CreateFirewallForInstance(ctx, client, linodego.Instance{ID: 101, Label: "cg-node-001"})
+	firewall, err := CreateSharedFirewallForInstance(context.Background(), client, linodego.Instance{ID: 101, Label: "cg-node-001"})
 	if err != nil {
-		t.Fatalf("first CreateFirewallForInstance() error = %v", err)
+		t.Fatalf("CreateSharedFirewallForInstance() error = %v", err)
 	}
-	second, err := CreateFirewallForInstance(ctx, client, linodego.Instance{ID: 202, Label: "cg-node-001"})
-	if err != nil {
-		t.Fatalf("second CreateFirewallForInstance() error = %v", err)
+	if firewall.Label != SharedFirewallLabel {
+		t.Fatalf("firewall label = %q, want %q", firewall.Label, SharedFirewallLabel)
 	}
-
-	if first.Label != "cg-node-001-fw-101" {
-		t.Errorf("first firewall label = %q, want cg-node-001-fw-101", first.Label)
-	}
-	if second.Label != "cg-node-001-fw-202" {
-		t.Errorf("second firewall label = %q, want cg-node-001-fw-202", second.Label)
-	}
-	if first.Label == second.Label {
-		t.Fatalf("firewall labels must be unique, both are %q", first.Label)
+	if len(client.firewallOptions) != 1 || len(client.firewallOptions[0].Devices.Linodes) != 1 || client.firewallOptions[0].Devices.Linodes[0] != 101 {
+		t.Fatalf("firewall create options = %+v, want first instance 101 attached", client.firewallOptions)
 	}
 }
 
