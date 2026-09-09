@@ -18,7 +18,9 @@ type Client interface {
 	ListInstances(context.Context, *linodego.ListOptions) ([]linodego.Instance, error)
 	CreateInstance(context.Context, linodego.InstanceCreateOptions) (*linodego.Instance, error)
 	DeleteInstance(context.Context, int) error
+	ListFirewalls(context.Context, *linodego.ListOptions) ([]linodego.Firewall, error)
 	CreateFirewall(context.Context, linodego.FirewallCreateOptions) (*linodego.Firewall, error)
+	CreateFirewallDevice(context.Context, int, linodego.FirewallDeviceCreateOptions) (*linodego.FirewallDevice, error)
 }
 
 func NewClient(token string) (Client, error) {
