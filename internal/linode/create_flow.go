@@ -69,9 +69,9 @@ func CreateInstances(ctx context.Context, client Client, config CreateConfig, ou
 				failed++
 				cleanupErr := client.DeleteInstance(ctx, instance.ID)
 				if cleanupErr != nil {
-					fmt.Fprintf(out, "[%d/%d] Firewall 创建失败: %v；实例清理失败，请手动删除实例 %d（区域: %s）: %v\n", index+1, len(labels), firewallErr, instance.ID, displayRegion(instance.Region), cleanupErr)
+					fmt.Fprintf(out, "[%d/%d] Firewall 创建失败: %v；实例清理失败，请手动删除 %s (%s): %v\n", index+1, len(labels), firewallErr, instance.Label, displayInstanceDetails(*instance), cleanupErr)
 				} else {
-					fmt.Fprintf(out, "[%d/%d] Firewall 创建失败: %v；已删除刚创建的实例 %d（区域: %s）\n", index+1, len(labels), firewallErr, instance.ID, displayRegion(instance.Region))
+					fmt.Fprintf(out, "[%d/%d] Firewall 创建失败: %v；已删除刚创建的实例 %s (%s)\n", index+1, len(labels), firewallErr, instance.Label, displayInstanceDetails(*instance))
 				}
 				continue
 			}
@@ -81,15 +81,15 @@ func CreateInstances(ctx context.Context, client Client, config CreateConfig, ou
 				failed++
 				cleanupErr := client.DeleteInstance(ctx, instance.ID)
 				if cleanupErr != nil {
-					fmt.Fprintf(out, "[%d/%d] Firewall 绑定失败: %v；实例清理失败，请手动删除实例 %d（区域: %s）: %v\n", index+1, len(labels), attachErr, instance.ID, displayRegion(instance.Region), cleanupErr)
+					fmt.Fprintf(out, "[%d/%d] Firewall 绑定失败: %v；实例清理失败，请手动删除 %s (%s): %v\n", index+1, len(labels), attachErr, instance.Label, displayInstanceDetails(*instance), cleanupErr)
 				} else {
-					fmt.Fprintf(out, "[%d/%d] Firewall 绑定失败: %v；已删除刚创建的实例 %d（区域: %s）\n", index+1, len(labels), attachErr, instance.ID, displayRegion(instance.Region))
+					fmt.Fprintf(out, "[%d/%d] Firewall 绑定失败: %v；已删除刚创建的实例 %s (%s)\n", index+1, len(labels), attachErr, instance.Label, displayInstanceDetails(*instance))
 				}
 				continue
 			}
 		}
 
-		fmt.Fprintf(out, "[%d/%d] 创建成功: %s (ID: %d, 区域: %s, Firewall ID: %d)\n", index+1, len(labels), instance.Label, instance.ID, displayRegion(instance.Region), sharedFirewall.ID)
+		fmt.Fprintf(out, "[%d/%d] 创建成功: %s (%s, Firewall ID: %d)\n", index+1, len(labels), instance.Label, displayInstanceDetails(*instance), sharedFirewall.ID)
 	}
 
 	if failed > 0 {
